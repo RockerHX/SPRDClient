@@ -1,0 +1,60 @@
+name: 编译 SPRDClient Windows 应用程序
+
+on:
+  # 手动触发
+  workflow_dispatch:
+  # 可选：也可以在推送到主分支时触发（目前注释掉）
+  # push:
+  #   branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    # 1. 检出 SPRDClient 主仓库
+    - name: 检出 SPRDClient 仓库
+      uses: actions/checkout@v4
+      with:
+        path: SPRDClient
+    
+    # 2. 检出 SPRDClientCore 核心库到正确的相对路径
+    - name: 检出 SPRDClientCore 仓库
+      uses: actions/checkout@v4
+      with:
+        repository: RockerHX/SPRDClientCore
+        path: SPRDClientCore
+    
+    # 3. 设置 .NET 8.0 SDK
+    - name: 安装 .NET 8.0
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: '8.0.x'
+    
+    # 4. 还原 NuGet 包
+    - name: 还原依赖包
+      run: dotnet restore SPRDClient/SPRDClient.sln
+    
+    # 5. 编译项目（Release 配置）
+    - name: 编译项目
+      run: dotnet build SPRDClient/SPRDClient.sln --configuration Release --no-restore
+    
+    # 6. 发布自包含应用程序（生成独立 exe）
+    - name: 发布应用程序
+      run: |
+        dotnet publish SPRDClient/SPRDClient.csproj `
+          --configuration Release `
+          --runtime win-x64 `
+          --self-contained true `
+          --output ./publish `
+          -p:PublishSingleFile=true `
+          -p:IncludeNativeLibrariesForSelfExtract=true `
+          -p:EnableCompressionInSingleFile=true
+    
+    # 7. 上传编译产物
+    - name: 上传构建产物
+      uses: actions/upload-artifact@v4
+      with:
+        name: SPRDClient-windows-x64
+        path: ./publish/**/*
+        retention-days: 30
