@@ -1,11 +1,18 @@
-name: 编译 SPRDClient Windows 应用程序
+name: 编译并发布 SPRDClient
 
 on:
-  # 手动触发
+  # 手动触发（可选输入版本号）
   workflow_dispatch:
-  # 可选：也可以在推送到主分支时触发（目前注释掉）
-  # push:
-  #   branches: [ main, master ]
+    inputs:
+      version:
+        description: '版本号（如 v1.3.0，留空则仅编译不发布 Release）'
+        required: false
+        type: string
+  
+  # 推送 tag 时自动触发
+  push:
+    tags:
+      - 'v*'
 
 jobs:
   build:
@@ -51,10 +58,50 @@ jobs:
           -p:IncludeNativeLibrariesForSelfExtract=true `
           -p:EnableCompressionInSingleFile=true
     
-    # 7. 上传编译产物
+    # 7. 压缩发布文件为 zip
+    - name: 压缩发布文件
+      run: Compress-Archive -Path ./publish/* -DestinationPath SPRDClient-windows-x64.zip
+    
+    # 8. 上传编译产物（所有构建都上传，保留 30 天）
     - name: 上传构建产物
       uses: actions/upload-artifact@v4
       with:
         name: SPRDClient-windows-x64
-        path: ./publish/**/*
+        path: SPRDClient-windows-x64.zip
         retention-days: 30
+    
+    # 9. 创建 GitHub Release（仅当有版本号时）
+    - name: 创建 GitHub Release
+      if: github.event.inputs.version != '' || startsWith(github.ref, 'refs/tags/')
+      uses: ncipollo/release-action@v1
+      with:
+        tag: ${{ github.event.inputs.version || github.ref_name }}
+        name: SPRDClient ${{ github.event.inputs.version || github.ref_name }}
+        artifacts: "SPRDClient-windows-x64.zip"
+        body: |
+          ## 📦 SPRDClient Windows 版本
+          
+          展讯（Unisoc/Spreadtrum）设备刷机工具 Windows 客户端
+          
+          ### 📥 下载说明
+          1. 下载 `SPRDClient-windows-x64.zip` 并解压
+          2. 运行 `SPRDClient.exe` 即可使用
+          3. **无需安装 .NET 运行时**（自包含发布）
+          
+          ### ✨ 功能特性
+          - ✅ 支持展讯设备 Brom/Fdl1/Fdl2 阶段通信
+          - ✅ 支持发送 FDL 文件到指定地址
+          - ✅ 支持读写设备分区
+          - ✅ 支持无 FDL 刷机模式
+          - ✅ 支持重连模式
+          - ✅ 现代化 Fluent Design 界面
+          
+          ### 📝 使用说明
+          详细使用说明请查看项目 README 文档
+          
+          ### 👥 作者
+          YC & la1N
+          
+          ---
+          🔧 编译环境：Windows Server 2022 + .NET 8.0  
+          📅 发布时间：${{ github.event.repository.updated_at }}
